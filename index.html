@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Vicion TV - 500+ TDT + 1000 Radio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0a0a0a; font-family: system-ui, Arial, sans-serif; color: white; height: 100vh; overflow: hidden; }
+        .main-layout { display: flex; height: 100vh; width: 100%; }
+        .player-column { width: 380px; background: #000; display: flex; flex-direction: column; border-right: 1px solid #222; }
+        .mini-player { position: relative; background: #000; aspect-ratio: 16 / 9; width: 100%; }
+        .mini-player video { width: 100%; height: 100%; object-fit: contain; }
+        .player-info { padding: 12px; background: #0f0f0f; border-bottom: 1px solid #222; }
+        .current-channel { font-weight: bold; font-size: 14px; margin-bottom: 8px; }
+        .player-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+        .player-buttons button { background: #1e1e1e; border: none; color: white; padding: 6px 12px; border-radius: 20px; cursor: pointer; font-size: 11px; }
+        .player-buttons button:hover { background: #ff2a2a; }
+        .channels-column { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 15px; }
+        .header { text-align: center; padding: 10px; border-bottom: 1px solid #222; margin-bottom: 15px; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 15px; justify-content: center; }
+        .tab-btn { background: #1e1e1e; border: none; color: white; padding: 8px 20px; border-radius: 25px; cursor: pointer; font-size: 13px; }
+        .tab-btn.active { background: #ff2a2a; }
+        .buttons-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; justify-content: center; }
+        .btn-primary { background: #0066cc; border: none; color: white; padding: 8px 15px; border-radius: 25px; cursor: pointer; font-size: 12px; }
+        .btn-radio { background: #2c7a4d; border: none; color: white; padding: 8px 15px; border-radius: 25px; cursor: pointer; font-size: 12px; }
+        .btn-m3u { background: #ff2a2a; border: none; color: white; padding: 8px 15px; border-radius: 25px; cursor: pointer; font-size: 12px; }
+        .upload-area { text-align: center; padding: 12px; border: 2px dashed #ff2a2a; border-radius: 12px; margin-bottom: 15px; cursor: pointer; background: #0f0f0f; font-size: 12px; display: none; }
+        .saved-list { margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 5px; }
+        .saved-list button { background: #2c7a4d; border: none; color: white; padding: 5px 10px; border-radius: 15px; font-size: 11px; cursor: pointer; }
+        .search-box { margin-bottom: 15px; }
+        .search-box input { width: 100%; padding: 10px; background: #1e1e1e; border: 1px solid #333; color: white; border-radius: 8px; }
+        .channels-grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; padding: 5px; }
+        .channel-card { background: #111; border-radius: 8px; padding: 10px; cursor: pointer; border: 1px solid #222; transition: 0.2s; text-align: center; position: relative; }
+        .channel-card:hover { border-color: #ff2a2a; background: #1a1a1a; }
+        .channel-card .thumbnail { font-size: 32px; margin-bottom: 5px; }
+        .channel-card .channel-name { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .fav-star { position: absolute; top: 5px; right: 8px; font-size: 14px; cursor: pointer; color: #555; transition: 0.2s; z-index: 10; }
+        .fav-star.active { color: #ffaa00; text-shadow: 0 0 5px #ffaa00; }
+        .fav-star:hover { transform: scale(1.2); }
+        .counter { font-size: 12px; color: #ffaa00; text-align: center; padding: 8px; }
+        .fullscreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; background: #000; }
+        .fullscreen .mini-player { width: 100%; height: 100%; aspect-ratio: unset; }
+        .fullscreen .player-info, .fullscreen .channels-column { display: none; }
+        .exit-fullscreen { position: fixed; bottom: 20px; right: 20px; z-index: 10000; background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 30px; cursor: pointer; }
+        .loading { text-align: center; padding: 20px; color: #888; }
+        @media (max-width: 768px) { .main-layout { flex-direction: column; } .player-column { width: 100%; } }
+    </style>
+</head>
+<body>
+<div class="main-layout" id="mainLayout">
+    <div class="player-column" id="playerColumn">
+        <div class="mini-player">
+            <video id="videoPlayer" controls></video>
+        </div>
+        <div class="player-info">
+            <div class="current-channel" id="currentChannel">📺 Selecciona un canal</div>
+            <div class="player-buttons">
+                <button id="fullscreenBtn">🖥️ Pantalla Completa</button>
+                <button id="copyUrlBtn">📋 Copiar URL</button>
+                <button id="openVlcBtn">🎬 Abrir en VLC</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="channels-column">
+        <div class="header">
+            <h2>📺 VICION TV</h2>
+            <p style="font-size: 11px; color: #888;">500+ TDT | 1000+ Radio | ⭐ Favoritos</p>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab-btn active" id="tabTodos">📡 TODOS</button>
+            <button class="tab-btn" id="tabFavs">⭐ FAVORITOS</button>
+        </div>
+        
+        <div class="buttons-row">
+            <button class="btn-primary" id="loadTdtBtn">📺 TDT ESPAÑA</button>
+            <button class="btn-radio" id="loadRadioBtn">📻 RADIO</button>
+            <button class="btn-m3u" id="loadM3uBtn">📂 CARGAR M3U</button>
+        </div>
+        
+        <div class="upload-area" id="uploadArea">📂 Haz clic para seleccionar archivo .m3u</div>
+        <input type="file" id="fileInput" accept=".m3u,.m3u8,.txt" style="display:none">
+        
+        <div class="saved-list" id="savedList"></div>
+        
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="🔍 Buscar canal...">
+        </div>
+        
+        <div class="counter" id="counter">🟡 Cargando canales...</div>
+        <div class="channels-grid" id="channelsGrid"></div>
+    </div>
+</div>
+
+<div id="exitFullscreen" class="exit-fullscreen" style="display:none;">❌ Salir</div>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script>
+    const fileInput = document.getElementById('fileInput');
+    const uploadArea = document.getElementById('uploadArea');
+    const channelsGrid = document.getElementById('channelsGrid');
+    const counter = document.getElementById('counter');
+    const video = document.getElementById('videoPlayer');
+    const currentChannelSpan = document.getElementById('currentChannel');
+    const savedListDiv = document.getElementById('savedList');
+    const searchInput = document.getElementById('searchInput');
+    const mainLayout = document.getElementById('mainLayout');
+    const playerColumn = document.getElementById('playerColumn');
+    const exitFullscreenBtn = document.getElementById('exitFullscreen');
+    const tabTodos = document.getElementById('tabTodos');
+    const tabFavs = document.getElementById('tabFavs');
+    
+    let canales = [];
+    let canalesFiltrados = [];
+    let listasGuardadas = [];
+    let favoritos = [];
+    let modoFavoritos = false;
+    let hls = null;
+    
+    // URLs oficiales con TODOS los canales
+    const URL_TDT = 'https://raw.githubusercontent.com/LaQuay/TDTChannels/master/tv-guide/spain/tv_channels_es_M3U8.m3u';
+    const URL_RADIO = 'https://raw.githubusercontent.com/LaQuay/TDTChannels/master/radio-guide/spain/radio_es_M3U8.m3u';
+    
+    // ========== FAVORITOS ==========
+    function cargarFavoritos() {
+        const favs = localStorage.getItem('vicion_favoritos');
+        if (favs) favoritos = JSON.parse(favs);
+    }
+    
+    function guardarFavoritos() {
+        localStorage.setItem('vicion_favoritos', JSON.stringify(favoritos));
+    }
+    
+    function esFavorito(canal) {
+        return favoritos.includes(`${canal.name}_${canal.url}`);
+    }
+    
+    function toggleFavorito(canal, indexEnCanales) {
+        const canalId = `${canal.name}_${canal.url}`;
+        const pos = favoritos.indexOf(canalId);
+        if (pos === -1) favoritos.push(canalId);
+        else favoritos.splice(pos, 1);
+        guardarFavoritos();
+        
+        if (modoFavoritos) actualizarVista();
+        else {
+            const cards = document.querySelectorAll('.channel-card');
+            if (cards[indexEnCanales]) {
+                const star = cards[indexEnCanales].querySelector('.fav-star');
+                if (star) {
+                    star.classList.toggle('active');
+                    star.innerHTML = esFavorito(canal) ? '⭐' : '☆';
+                }
+            }
+        }
+    }
+    
+    function actualizarVista() {
+        if (modoFavoritos) {
+            canalesFiltrados = canales.filter(c => esFavorito(c));
+            counter.innerHTML = `⭐ ${canalesFiltrados.length} canales favoritos`;
+        } else {
+            canalesFiltrados = [...canales];
+            counter.innerHTML = `📺 ${canales.length} canales totales`;
+        }
+        const searchTerm = searchInput.value.toLowerCase();
+        if (searchTerm) {
+            canalesFiltrados = canalesFiltrados.filter(c => c.name.toLowerCase().includes(searchTerm));
+            counter.innerHTML = `🔍 Mostrando ${canalesFiltrados.length}`;
+        }
+        mostrarCanales();
+    }
+    
+    // ========== CARGA DE LISTAS ==========
+    async function cargarDesdeURL(url, nombre) {
+        counter.innerHTML = `🟡 Cargando ${nombre}...`;
+        channelsGrid.innerHTML = '<div class="loading">⏳ Cargando lista de canales...</div>';
+        
+        try {
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+            const response = await fetch(proxyUrl);
+            const m3uContent = await response.text();
+            parseM3U(m3uContent, nombre);
+        } catch (error) {
+            counter.innerHTML = `❌ Error al cargar ${nombre}`;
+        }
+    }
+    
+    function parseM3U(content, nombre) {
+        const lines = content.split('\n');
+        canales = [];
+        let currentName = '';
+        
+        for (let line of lines) {
+            line = line.trim();
+            if (line.startsWith('#EXTINF:')) {
+                const match = line.match(/#EXTINF:.*?,(.*)$/);
+                if (match) currentName = match[1];
+            } else if (line && !line.startsWith('#') && currentName && line.startsWith('http')) {
+                canales.push({ name: currentName, url: line, group: nombre });
+                currentName = '';
+            }
+        }
+        
+        actualizarVista();
+        guardarListaActual(nombre);
+    }
+    
+    function guardarListaActual(nombre) {
+        if (canales.length === 0) return;
+        const lista = { id: Date.now(), nombre: nombre, canales: canales };
+        listasGuardadas.unshift(lista);
+        if (listasGuardadas.length > 10) listasGuardadas.pop();
+        localStorage.setItem('m3u_listas', JSON.stringify(listasGuardadas));
+        mostrarListasGuardadas();
+    }
+    
+    function mostrarListasGuardadas() {
+        const guardadas = localStorage.getItem('m3u_listas');
+        if (guardadas) listasGuardadas = JSON.parse(guardadas);
+        if (listasGuardadas.length === 0) {
+            savedListDiv.innerHTML = '<small>No hay listas guardadas</small>';
+            return;
+        }
+        let html = '';
+        listasGuardadas.forEach(lista => {
+            html += `<button onclick="cargarListaGuardada(${lista.id})">📺 ${lista.nombre.substring(0, 25)} (${lista.canales.length})</button>`;
+        });
+        savedListDiv.innerHTML = html;
+    }
+    
+    window.cargarListaGuardada = function(id) {
+        const lista = listasGuardadas.find(l => l.id === id);
+        if (lista) {
+            canales = lista.canales;
+            actualizarVista();
+            uploadArea.style.display = 'none';
+        }
+    };
+    
+    function mostrarUploadM3U() {
+        uploadArea.style.display = 'block';
+        canales = [];
+        actualizarVista();
+        counter.innerHTML = '🟡 Selecciona un archivo .m3u';
+    }
+    
+    uploadArea.onclick = () => fileInput.click();
+    fileInput.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const text = await file.text();
+        parseM3U(text, file.name.replace(/\.(m3u|m3u8|txt)$/i, ''));
+        uploadArea.style.display = 'none';
+    };
+    
+    function mostrarCanales() {
+        channelsGrid.innerHTML = '';
+        canalesFiltrados.forEach((canal, idx) => {
+            const card = document.createElement('div');
+            card.className = 'channel-card';
+            const indexEnCanales = canales.findIndex(c => c.name === canal.name && c.url === canal.url);
+            card.onclick = (e) => {
+                if (e.target.classList?.contains('fav-star')) return;
+                reproducirCanal(idx);
+            };
+            let icono = canal.group === 'RADIO' ? '📻' : '📺';
+            const esFav = esFavorito(canal);
+            card.innerHTML = `
+                <div class="fav-star ${esFav ? 'active' : ''}" onclick="event.stopPropagation(); window.toggleFavoritoDesdeIndex(${indexEnCanales})">${esFav ? '⭐' : '☆'}</div>
+                <div class="thumbnail">${icono}</div>
+                <div class="channel-name">${canal.name.substring(0, 35)}</div>
+            `;
+            channelsGrid.appendChild(card);
+        });
+    }
+    
+    window.toggleFavoritoDesdeIndex = function(index) {
+        if (index >= 0 && index < canales.length) toggleFavorito(canales[index], index);
+    };
+    
+    function reproducirCanal(index) {
+        const canal = canalesFiltrados[index];
+        currentChannelSpan.innerHTML = `${canal.name}`;
+        if (hls) { hls.destroy(); hls = null; }
+        const url = canal.url;
+        if (Hls.isSupported() && url.includes('.m3u8')) {
+            hls = new Hls();
+            hls.loadSource(url);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+        } else {
+            video.src = url;
+            video.play();
+        }
+    }
+    
+    searchInput.addEventListener('input', () => actualizarVista());
+    
+    tabTodos.onclick = () => { modoFavoritos = false; tabTodos.classList.add('active'); tabFavs.classList.remove('active'); actualizarVista(); };
+    tabFavs.onclick = () => { modoFavoritos = true; tabFavs.classList.add('active'); tabTodos.classList.remove('active'); actualizarVista(); };
+    
+    let isFullscreen = false;
+    function entrarFullscreen() { isFullscreen = true; mainLayout.classList.add('fullscreen'); playerColumn.classList.add('fullscreen'); exitFullscreenBtn.style.display = 'block'; document.body.style.overflow = 'hidden'; }
+    function salirFullscreen() { isFullscreen = false; mainLayout.classList.remove('fullscreen'); playerColumn.classList.remove('fullscreen'); exitFullscreenBtn.style.display = 'none'; document.body.style.overflow = ''; }
+    document.getElementById('fullscreenBtn').onclick = entrarFullscreen;
+    exitFullscreenBtn.onclick = salirFullscreen;
+    
+    document.getElementById('copyUrlBtn').onclick = () => { if (video.src) { navigator.clipboard.writeText(video.src); alert('✅ URL copiada'); } };
+    document.getElementById('openVlcBtn').onclick = () => { if (video.src) { window.location.href = `vlc://${video.src}`; alert(`Si no se abre VLC:\nMedio → Abrir ubicación de red\n${video.src}`); } };
+    
+    document.getElementById('loadTdtBtn').onclick = () => { cargarDesdeURL(URL_TDT, 'TDT'); uploadArea.style.display = 'none'; };
+    document.getElementById('loadRadioBtn').onclick = () => { cargarDesdeURL(URL_RADIO, 'RADIO'); uploadArea.style.display = 'none'; };
+    document.getElementById('loadM3uBtn').onclick = () => { mostrarUploadM3U(); };
+    
+    cargarFavoritos();
+    mostrarListasGuardadas();
+    cargarDesdeURL(URL_TDT, 'TDT');
+</script>
+</body>
+</html>
